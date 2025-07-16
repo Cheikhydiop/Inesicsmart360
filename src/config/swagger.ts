@@ -12,7 +12,7 @@ const options = {
     },
     servers: [
       {
-        url: `https://backendg7.onrender.com/`,
+        url: `https://inesicsmart360.onrender.com/`,
         description: 'Serveur de développement',
       },
       {
