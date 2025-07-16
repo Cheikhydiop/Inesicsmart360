@@ -1,0 +1,983 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                        String                 @id @default(cuid())
+  name                      String
+  email                     String                 @unique
+  password                  String
+  role                      UserRole
+  status                    UserStatus             @default(ACTIVE)
+  avatar                    String?
+  phoneNumber               String?
+  jobTitle                  String?
+  department                String?
+  createdAt                 DateTime               @default(now())
+  lastLogin                 DateTime?
+  updatedAt                 DateTime               @updatedAt
+  organizationId            String?
+  uploadedAttachments       Attachment[]
+  createdComments           Comment[]
+  amendmentsSigned          ContractAmendment[]    @relation("AmendmentSigner")
+  contractsSigned           Contract[]             @relation("ContractSigner")
+  uploadedDocuments         Document[]
+  assignedEquipment         Equipment[]            @relation("EquipmentAssignee")
+  evaluationsGiven          Evaluation[]           @relation("Evaluator")
+  formTemplatesCreated      FormTemplate[]
+  inventoryTransactions     InventoryTransaction[]
+  createdMaintenanceRecords MaintenanceRecord[]    @relation("MaintenanceCreator")
+  maintenanceRecords        MaintenanceRecord[]    @relation("MaintenanceTechnician")
+  managedProjects           Project[]              @relation("ProjectManager")
+  assignedRequests          Request[]              @relation("RequestAssignee")
+  createdRequests           Request[]              @relation("RequestCreator")
+  requestsMadeOnOrg         Request[]              @relation("UserIdRequest")
+  signatures                Signature[]
+  assignedTasks             Task[]                 @relation("TaskAssignee")
+  organization              Organization?          @relation(fields: [organizationId], references: [id])
+  supervisedProjects        Project[]              @relation("ProjectSupervisors")
+
+  @@map("users")
+}
+
+model Project {
+  id               String        @id @default(cuid())
+  name             String
+  description      String
+  objective        String
+  scope            String
+  geographicalArea String
+  client           String
+  startDate        DateTime
+  endDate          DateTime
+  status           ProjectStatus
+  budget           Float?
+  progress         Float         @default(0)
+  contract         String?
+  funder           String?
+  governmentEntity String?
+  riskLevel        RiskLevel?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  // Relations
+  organizationId      String               @default("default-org-id") // Remplacez par un ID d'organisation existant
+  organization        Organization         @relation("OrganizationProjects", fields: [organizationId], references: [id])
+  projectManagerId    String
+  projectManager      User                 @relation("ProjectManager", fields: [projectManagerId], references: [id])
+  supervisors         User[]               @relation("ProjectSupervisors")
+  contractors         Contractor[]         @relation("ContractorToProject") // Correction ici
+  parentProjectId     String?
+  parentProject       Project?             @relation("SubProjects", fields: [parentProjectId], references: [id])
+  subProjects         Project[]            @relation("SubProjects")
+  tasks               Task[]
+  documents           Document[]
+  requests            Request[]
+  kpis                KPI[]
+  timeline            TimelinePoint[]
+  budgetDistribution  BudgetItem[]
+  locationId          String?
+  location            Location?            @relation(fields: [locationId], references: [id])
+  contracts           Contract[]
+  evaluations         Evaluation[]
+  budgetDistributions BudgetDistribution[] @relation("ProjectBudgetDistributions")
+  projectContracts    ProjectContract[] // Ajout de la relation manquante
+
+  @@map("projects")
+}
+
+model BudgetDistribution {
+  id         String  @id @default(cuid())
+  category   String
+  amount     Float
+  percentage Float
+  projectId  String
+  project    Project @relation("ProjectBudgetDistributions", fields: [projectId], references: [id])
+}
+
+model TimelinePoint {
+  id        String   @id @default(cuid())
+  date      DateTime
+  planned   Float
+  actual    Float?
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("timeline_points")
+}
+
+model BudgetItem {
+  id         String  @id @default(cuid())
+  category   String
+  amount     Float
+  percentage Float
+  projectId  String
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("budget_items")
+}
+
+model Provider {
+  id                 String          @id @default(cuid())
+  name               String
+  companyType        ProviderType
+  registrationNumber String          @unique
+  taxId              String?
+  foundedDate        DateTime?
+  contactPerson      String
+  email              String
+  phoneNumber        String
+  website            String?
+  specializations    String[]
+  services           String[]
+  description        String?
+  logo               String?
+  rating             Float?
+  status             ProviderStatus  @default(PENDING_VERIFICATION)
+  paymentTerms       String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  street             String
+  city               String
+  postalCode         String
+  country            String
+  bankName           String?
+  accountNumber      String?
+  accountName        String?
+  swiftCode          String?
+  iban               String?
+  organizationId     String?
+  certifications     Certification[]
+  contracts          Contract[]
+  documents          Document[]
+  evaluations        Evaluation[]
+  inventoryItems     InventoryItem[]
+  organization       Organization?   @relation(fields: [organizationId], references: [id])
+
+  @@map("providers")
+}
+
+model Contractor {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  phone              String?
+  phoneNumber        String? // Préservé
+  address            String?
+  description        String? // Préservé
+  specialization     String?
+  services           String? // Préservé
+  certifications     String[]
+  experienceYears    Int?
+  rating             Float?
+  isActive           Boolean   @default(true)
+  status             String? // Préservé
+  contractStartDate  DateTime?
+  contractEndDate    DateTime?
+  hourlyRate         Float?
+  totalHoursWorked   Int       @default(0)
+  companyType        String? // Préservé
+  contactPerson      String? // Préservé
+  foundedDate        DateTime? // Préservé
+  logo               String? // Préservé
+  registrationNumber String? // Préservé
+  taxId              String? // Préservé
+  website            String? // Préservé
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  projects           Project[] @relation("ContractorToProject")
+
+  @@map("contractors")
+}
+
+model Contract {
+  id                String              @id @default(cuid())
+  title             String
+  description       String?
+  startDate         DateTime
+  endDate           DateTime
+  value             Float
+  currency          String
+  paymentTerms      String
+  status            ContractStatus
+  signedAt          DateTime?
+  terminatedAt      DateTime?
+  terminationReason String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  providerId        String
+  projectId         String?
+  signedById        String?
+  amendments        ContractAmendment[]
+  project           Project?            @relation(fields: [projectId], references: [id])
+  provider          Provider            @relation(fields: [providerId], references: [id])
+  signedBy          User?               @relation("ContractSigner", fields: [signedById], references: [id])
+  documents         Document[]
+  projectContracts  ProjectContract[] // Ajout de la relation manquante
+
+  @@map("contracts")
+}
+
+model ContractAmendment {
+  id            String         @id @default(cuid())
+  title         String
+  description   String
+  changes       String
+  reason        String
+  effectiveDate DateTime
+  signedAt      DateTime?
+  status        ContractStatus
+  createdAt     DateTime       @default(now())
+  contractId    String
+  signedById    String?
+  contract      Contract       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  signedBy      User?          @relation("AmendmentSigner", fields: [signedById], references: [id])
+  documents     Document[]
+
+  @@map("contract_amendments")
+}
+
+model Certification {
+  id               String              @id @default(cuid())
+  name             String
+  issuingAuthority String
+  issuedDate       DateTime
+  expiryDate       DateTime?
+  documentId       String?
+  status           CertificationStatus
+  verificationUrl  String?
+  providerId       String
+  provider         Provider            @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("certifications")
+}
+
+model Evaluation {
+  id              String               @id @default(cuid())
+  date            DateTime
+  overallRating   Float
+  comments        String?
+  recommendations String?
+  providerId      String
+  evaluatorId     String
+  projectId       String?
+  criteria        EvaluationCriteria[]
+  evaluator       User                 @relation("Evaluator", fields: [evaluatorId], references: [id])
+  project         Project?             @relation(fields: [projectId], references: [id])
+  provider        Provider             @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@map("evaluations")
+}
+
+model EvaluationCriteria {
+  id           String     @id @default(cuid())
+  name         String
+  description  String?
+  rating       Float
+  weight       Float
+  comments     String?
+  evaluationId String
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@map("evaluation_criteria")
+}
+
+model Request {
+  id                String         @id @default(cuid())
+  title             String
+  description       String
+  type              RequestType
+  priority          Priority
+  status            RequestStatus
+  dueDate           DateTime?
+  channel           RequestChannel
+  createdAt         DateTime       @default(now())
+  createdById       String
+  assignedToId      String?
+  projectId         String?
+  subProject        String?
+  site              String?
+  contract          String?
+  locationId        String?
+  organisationOrgId String?
+  origaUserId       String?
+  attachments       Attachment[]
+  comments          Comment[]
+  assignedTo        User?          @relation("RequestAssignee", fields: [assignedToId], references: [id])
+  createdBy         User           @relation("RequestCreator", fields: [createdById], references: [id])
+  location          Location?      @relation(fields: [locationId], references: [id])
+  organisation      Organization?  @relation("OrganizationRequest", fields: [organisationOrgId], references: [id])
+  origaUser         User?          @relation("UserIdRequest", fields: [origaUserId], references: [id])
+  project           Project?       @relation(fields: [projectId], references: [id])
+  tasks             Task[]
+
+  @@map("requests")
+}
+
+model Task {
+  id                String               @id @default(cuid())
+  title             String
+  description       String
+  status            TaskStatus
+  priority          Priority
+  dueDate           DateTime
+  completedAt       DateTime?
+  formTemplate      String?
+  formData          Json?
+  dependencies      String[]
+  createdAt         DateTime             @default(now())
+  assignedToId      String?
+  projectId         String?
+  requestId         String?
+  locationId        String?
+  attachments       Attachment[]
+  checklist         ChecklistItem[]
+  comments          Comment[]
+  equipmentRequired EquipmentReference[]
+  assignedTo        User?                @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  location          Location?            @relation(fields: [locationId], references: [id])
+  project           Project?             @relation(fields: [projectId], references: [id])
+  request           Request?             @relation(fields: [requestId], references: [id])
+
+  @@map("tasks")
+}
+
+model ChecklistItem {
+  id          String  @id @default(cuid())
+  description String
+  completed   Boolean @default(false)
+  required    Boolean @default(false)
+  taskId      String
+  task        Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("checklist_items")
+}
+
+model EquipmentReference {
+  id     String          @id @default(cuid())
+  name   String
+  type   String
+  status EquipmentStatus
+  taskId String
+  task   Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("equipment_references")
+}
+
+model Equipment {
+  id                     String              @id @default(cuid())
+  name                   String
+  type                   String
+  model                  String
+  serialNumber           String              @unique
+  manufacturer           String
+  purchaseDate           DateTime
+  purchasePrice          Float
+  currency               String
+  warrantyExpirationDate DateTime?
+  status                 EquipmentStatus
+  condition              EquipmentCondition
+  description            String?
+  specifications         Json?
+  category               EquipmentCategory
+  tags                   String[]
+  lastMaintenance        DateTime?
+  nextMaintenance        DateTime?
+  code                   String?
+  imageUrl               String?
+  notes                  String?
+  barcode                String?
+  qrCode                 String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  attachedToType         String?
+  attachedToId           String?
+  assignedToId           String?
+  locationId             String?
+  supplierOrganizationId String?             // <-- Clé étrangère
+  documents              Document[]
+  assignedTo             User?               @relation("EquipmentAssignee", fields: [assignedToId], references: [id])
+  location               Location?           @relation(fields: [locationId], references: [id])
+  supplierOrganization   Organization?       @relation("OrganizationSuppliedEquipment", fields: [supplierOrganizationId], references: [id]) // <-- Relation vers Organization
+  maintenanceHistory     MaintenanceRecord[]
+
+  @@map("equipment")
+}
+
+
+model MaintenanceRecord {
+  id              String            @id @default(cuid())
+  maintenanceType MaintenanceType
+  date            DateTime
+  description     String
+  cost            Float?
+  currency        String?
+  status          MaintenanceStatus
+  notes           String?
+  scheduledDate   DateTime?
+  completedDate   DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  equipmentId     String
+  technicianId    String
+  createdById     String
+  documents       Document[]
+  createdBy       User              @relation("MaintenanceCreator", fields: [createdById], references: [id])
+  equipment       Equipment         @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  technician      User              @relation("MaintenanceTechnician", fields: [technicianId], references: [id])
+  parts           InventoryItem[]   @relation("InventoryItemToMaintenanceRecord")
+
+  @@map("maintenance_records")
+}
+
+model InventoryItem {
+  id                     String                 @id @default(cuid())
+  name                   String
+  SKU                    String                 @unique
+  category               String
+  description            String?
+  quantity               Int
+  unit                   String
+  minimumStock           Int?
+  purchasePrice          Float?
+  currency               String?
+  purchaseDate           DateTime?
+  expiryDate             DateTime?
+  specifications         Json?
+  tags                   String[]
+  status                 InventoryItemStatus
+  attachedTo             String?
+  imageUrl               String?
+  barcode                String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  locationId             String?
+  supplierId             String?
+  organizationSupplierId String?
+  location               Location?              @relation(fields: [locationId], references: [id])
+  supplier               Provider?              @relation(fields: [supplierId], references: [id])
+  organizationSupplier   Organization?          @relation("OrganizationAsSupplier", fields: [organizationSupplierId], references: [id]) // <-- NOM DE RELATION MATCHÉ
+  transactions           InventoryTransaction[]
+  maintenanceRecords     MaintenanceRecord[]    @relation("InventoryItemToMaintenanceRecord")
+
+  @@map("inventory_items")
+}
+
+model InventoryTransaction {
+  id              String                   @id @default(cuid())
+  transactionType InventoryTransactionType
+  quantity        Int
+  date            DateTime
+  reason          String?
+  project         String?
+  task            String?
+  notes           String?
+  createdAt       DateTime                 @default(now())
+  itemId          String
+  userId          String
+  fromLocationId  String?
+  toLocationId    String?
+  documents       Document[]
+  fromLocation    Location?                @relation("TransactionFromLocation", fields: [fromLocationId], references: [id])
+  item            InventoryItem            @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  toLocation      Location?                @relation("TransactionToLocation", fields: [toLocationId], references: [id])
+  user            User                     @relation(fields: [userId], references: [id])
+
+  @@map("inventory_transactions")
+}
+
+model Location {
+  id               String                 @id @default(cuid())
+  latitude         Float
+  longitude        Float
+  address          String?
+  city             String?
+  region           String?
+  country          String?
+  description      String?
+  name             String                 @default("N/A")
+  equipment        Equipment[]
+  inventoryItems   InventoryItem[]
+  fromTransactions InventoryTransaction[] @relation("TransactionFromLocation")
+  toTransactions   InventoryTransaction[] @relation("TransactionToLocation")
+  projects         Project[]
+  requests         Request[]
+  tasks            Task[]
+
+  @@map("locations")
+}
+
+model Comment {
+  id          String       @id @default(cuid())
+  content     String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdById String
+  requestId   String?
+  taskId      String?
+  attachments Attachment[]
+  createdBy   User         @relation(fields: [createdById], references: [id])
+  request     Request?     @relation(fields: [requestId], references: [id])
+  task        Task?        @relation(fields: [taskId], references: [id])
+
+  @@map("comments")
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  fileName     String
+  fileType     String
+  fileSize     Int
+  fileUrl      String
+  description  String?
+  uploadedAt   DateTime @default(now())
+  uploadedById String
+  requestId    String?
+  taskId       String?
+  commentId    String?
+  comment      Comment? @relation(fields: [commentId], references: [id])
+  request      Request? @relation(fields: [requestId], references: [id])
+  task         Task?    @relation(fields: [taskId], references: [id])
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+  @@map("attachments")
+}
+
+model Document {
+  id                     String                @id @default(cuid())
+  title                  String
+  description            String?
+  fileUrl                String
+  fileType               String
+  fileSize               Int
+  category               DocumentCategory
+  tags                   String[]
+  version                String
+  status                 DocumentStatus
+  uploadedAt             DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  relatedToType          String?
+  relatedToId            String?
+  uploadedById           String
+  projectId              String?
+  contractId             String?
+  contractAmendmentId    String?
+  providerId             String?
+  equipmentId            String?
+  maintenanceRecordId    String?
+  inventoryTransactionId String?
+  contractAmendment      ContractAmendment?    @relation(fields: [contractAmendmentId], references: [id])
+  contract               Contract?             @relation(fields: [contractId], references: [id])
+  equipment              Equipment?            @relation(fields: [equipmentId], references: [id])
+  inventoryTransaction   InventoryTransaction? @relation(fields: [inventoryTransactionId], references: [id])
+  maintenanceRecord      MaintenanceRecord?    @relation(fields: [maintenanceRecordId], references: [id])
+  project                Project?              @relation(fields: [projectId], references: [id])
+  provider               Provider?             @relation(fields: [providerId], references: [id])
+  uploadedBy             User                  @relation(fields: [uploadedById], references: [id])
+  signatures             Signature[]
+
+  @@map("documents")
+}
+
+model Signature {
+  id          String          @id @default(cuid())
+  signedAt    DateTime
+  validUntil  DateTime?
+  certificate String?
+  status      SignatureStatus
+  signedById  String
+  documentId  String
+  document    Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  signedBy    User            @relation(fields: [signedById], references: [id])
+
+  @@map("signatures")
+}
+
+model Notification {
+  id            String           @id @default(cuid())
+  title         String
+  message       String
+  type          NotificationType
+  priority      Priority
+  read          Boolean          @default(false)
+  recipient     String
+  createdAt     DateTime         @default(now())
+  relatedToType String?
+  relatedToId   String?
+
+  @@map("notifications")
+}
+
+model FormTemplate {
+  id          String             @id @default(cuid())
+  name        String
+  description String
+  category    String
+  version     String
+  status      FormTemplateStatus
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  createdById String
+  fields      FormField[]
+  createdBy   User               @relation(fields: [createdById], references: [id])
+
+  @@map("form_templates")
+}
+
+model FormField {
+  id          String        @id @default(cuid())
+  label       String
+  type        FormFieldType
+  required    Boolean       @default(false)
+  options     String[]
+  placeholder String?
+  helpText    String?
+  validation  String?
+  dependsOn   String?
+  showIf      Json?
+  templateId  String
+  template    FormTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@map("form_fields")
+}
+
+model KPI {
+  id            String    @id @default(cuid())
+  name          String
+  description   String
+  value         Float
+  target        Float
+  unit          String
+  trend         KPITrend
+  category      String
+  period        KPIPeriod
+  date          DateTime
+  relatedToType String?
+  relatedToId   String?
+  projectId     String?
+  project       Project?  @relation(fields: [projectId], references: [id])
+
+  @@map("kpis")
+}
+
+model Organization {
+  id                     String   @id @default(cuid())
+  name                   String
+  type                   String
+  sector                 String
+  zone_territoriale      String
+  contacts               String[]
+  logo                   String?
+  charte_graphe          String[]
+  status                 String
+  billing_status         String
+  last_payment_date      DateTime
+  subscription_end_date  DateTime
+  parent_organization_id String?
+  timezone               String
+  default_language       String
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+  settings               String?
+  country_id             String
+  address                String
+  legal_name             String
+  tax_number             String
+  industry_code          String
+
+  // Relations
+  parent                Organization?   @relation("OrgHierarchy", fields: [parent_organization_id], references: [id])
+  children              Organization[]  @relation("OrgHierarchy")
+  users                 User[]
+  requests              Request[]       @relation("OrganizationRequest")
+  providers             Provider[]
+  projects              Project[]       @relation("OrganizationProjects")
+  inventoryItemsFournis InventoryItem[] @relation("OrganizationAsSupplier") // <-- OK
+
+
+  suppliedEquipment     Equipment[]     @relation("OrganizationSuppliedEquipment") // 
+
+  @@map("organizations")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum UserRole {
+  ADMIN
+  PROJECT_MANAGER
+  SUPERVISOR
+  TECHNICIAN
+  CONTRACTOR
+  CLIENT
+  GOVERNMENT
+  CALL_CENTER
+  AUDITOR
+  CITIZEN
+}
+
+enum ProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProviderType {
+  ENTERPRISE
+  SMALL_BUSINESS
+  FREELANCE
+  COOPERATIVE
+  NGO
+  GOVERNMENT
+  OTHER
+}
+
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+  PENDING_VERIFICATION
+  SUSPENDED
+  BLACKLISTED
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_SIGNATURE
+  SIGNED
+  ACTIVE
+  COMPLETED
+  TERMINATED
+  EXPIRED
+  CANCELLED
+}
+
+enum CertificationStatus {
+  VALID
+  EXPIRED
+  REVOKED
+}
+
+enum RequestType {
+  CONNECTION
+  INCIDENT
+  AUDIT
+  INSPECTION
+  MAINTENANCE
+  OTHER
+}
+
+enum RequestStatus {
+  SUBMITTED
+  ANALYZING
+  VALIDATED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum RequestChannel {
+  APP
+  WEBSITE
+  API
+  CALL_CENTER
+  FIELD_AGENT
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaskStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  REPAIR
+  DEFECTIVE
+  LOST
+  RETIRED
+  RESERVED
+}
+
+enum EquipmentCondition {
+  NEW
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum EquipmentCategory {
+  ELECTRICAL
+  ELECTRONIC
+  MECHANICAL
+  IT
+  SAFETY
+  MEASUREMENT
+  CONSTRUCTION
+  VEHICLE
+  POWER
+  OFFICE
+  OTHER
+}
+
+enum MaintenanceType {
+  PREVENTIVE
+  CORRECTIVE
+  INSPECTION
+  CALIBRATION
+  UPGRADE
+  OTHER
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  PENDING_PARTS
+  DELAYED
+}
+
+enum InventoryItemStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+  DISCONTINUED
+  ON_ORDER
+  RESERVED
+}
+
+enum InventoryTransactionType {
+  RECEIPT
+  ISSUE
+  TRANSFER
+  RETURN
+  ADJUSTMENT
+  COUNT
+  WRITE_OFF
+}
+
+enum DocumentCategory {
+  CONTRACT
+  REPORT
+  PHOTO
+  NOTE
+  INVOICE
+  CERTIFICATE
+  REGULATORY
+  OTHER
+}
+
+enum DocumentStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum SignatureStatus {
+  PENDING
+  SIGNED
+  REJECTED
+  EXPIRED
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ALERT
+  SUCCESS
+  TASK_ASSIGNMENT
+  REQUEST_UPDATE
+  DOCUMENT_UPDATE
+  DEADLINE
+  SYSTEM
+}
+
+enum FormFieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DATE
+  TIME
+  DATETIME
+  SELECT
+  MULTISELECT
+  CHECKBOX
+  RADIO
+  FILE
+  IMAGE
+  LOCATION
+  SIGNATURE
+  BARCODE
+  QRCODE
+}
+
+enum FormTemplateStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum KPIPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum KPITrend {
+  UP
+  DOWN
+  STABLE
+}
+
+model ProjectContract {
+  id         String   @id @default(cuid())
+  projectId  String
+  contractId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  project  Project  @relation(fields: [projectId], references: [id])
+  contract Contract @relation(fields: [contractId], references: [id])
+
+  @@unique([projectId, contractId])
+  @@map("project_contracts")
+}
